@@ -10,22 +10,26 @@ dotenv.config();
 connectDB();
 
 const app = express();
+const requestBodyLimit = '10mb';
 
-app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:5173',
-  credentials: true
-}));
-app.use(express.json());
+app.use(
+  cors({
+    origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+    credentials: true,
+  }),
+);
+app.use(express.json({ limit: requestBodyLimit }));
+app.use(express.urlencoded({ extended: true, limit: requestBodyLimit }));
 
 // Mount API Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/posts', postRoutes);
 
-app.get('/', (req: Request, res: Response) => {
+app.get('/', (_req: Request, res: Response) => {
   res.json({ message: 'TaskPlanet Social API (TypeScript) is running smoothly.' });
 });
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`Server executing in ${process.env.NODE_ENV} mode on port ${PORT}`);
- });
+});

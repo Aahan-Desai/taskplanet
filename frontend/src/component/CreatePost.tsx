@@ -1,26 +1,88 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import API from '../api';
-import { Card, TextField, Button, Box, Typography, Alert } from '@mui/material';
+import {
+  Alert,
+  Avatar,
+  Box,
+  Button,
+  Card,
+  TextField,
+  Typography,
+  alpha,
+  useTheme,
+} from '@mui/material';
 import ImageOutlinedIcon from '@mui/icons-material/ImageOutlined';
-import SendIcon from '@mui/icons-material/Send';
+import SendRoundedIcon from '@mui/icons-material/SendRounded';
+import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
 
 interface CreatePostProps {
   onPostCreated: (newPost: any) => void;
 }
 
+const MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024;
+
 export const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
+  const theme = useTheme();
+  const isLight = theme.palette.mode === 'light';
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [textContent, setTextContent] = useState('');
   const [imageUrl, setImageUrl] = useState('');
-  const [showImageInput, setShowImageInput] = useState(false);
+  const [selectedImageName, setSelectedImageName] = useState('');
   const [error, setError] = useState('');
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const resetImageSelection = () => {
+    setImageUrl('');
+    setSelectedImageName('');
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const handleImageSelection = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) {
+      return;
+    }
+
+    if (!file.type.startsWith('image/')) {
+      setError('Please choose a valid image file.');
+      resetImageSelection();
+      return;
+    }
+
+    if (file.size > MAX_IMAGE_SIZE_BYTES) {
+      setError('Please choose an image smaller than 5 MB.');
+      resetImageSelection();
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result;
+      if (typeof result !== 'string') {
+        setError('We could not read that image. Please try another file.');
+        resetImageSelection();
+        return;
+      }
+
+      setError('');
+      setImageUrl(result);
+      setSelectedImageName(file.name);
+    };
+    reader.onerror = () => {
+      setError('We could not read that image. Please try another file.');
+      resetImageSelection();
+    };
+
+    reader.readAsDataURL(file);
+  };
+
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
     setError('');
 
-    // Field Validation: Ensure either text or image URL is supplied
     if (!textContent.trim() && !imageUrl.trim()) {
-      setError('Please add either some text or an image URL to share your post.');
+      setError('Please add some text or choose an image to share your post.');
       return;
     }
 
@@ -28,59 +90,149 @@ export const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
       const { data } = await API.post('/posts', { textContent, imageUrl });
       onPostCreated(data);
       setTextContent('');
-      setImageUrl('');
-      setShowImageInput(false);
+      resetImageSelection();
     } catch (err: any) {
+      if (err.response?.status === 413) {
+        setError('That image is too large to upload right now. Please choose a smaller file.');
+        return;
+      }
+
       setError(err.response?.data?.message || 'Error publishing post');
     }
   };
 
   return (
-    <Card sx={{ p: 3, mb: 4, borderRadius: 3, boxShadow: '0px 2px 12px rgba(0,0,0,0.05)' }}>
-      <Typography variant="h6" sx={{ fontWeight: 600, mb: 2, color: '#333' }}>
-        Share Something New
-      </Typography>
+    <Card
+      sx={{
+        p: { xs: 2, sm: 2.5 },
+        borderRadius: '12px',
+        bgcolor: 'background.paper',
+        boxShadow: isLight ? '0 1px 3px rgba(0,0,0,0.1)' : '0 1px 3px rgba(0,0,0,0.35)',
+        border: isLight ? 'none' : '1px solid rgba(255,255,255,0.08)',
+      }}
+    >
+      <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.5, mb: 2 }}>
+        <Avatar sx={{ bgcolor: 'primary.main', width: 46, height: 46, fontWeight: 700 }}>A</Avatar>
+        <Box sx={{ flex: 1 }}>
+          <Typography variant="h6" sx={{ fontWeight: 700, color: 'text.primary', mb: 0.5 }}>
+            Create a post
+          </Typography>
+          <Typography sx={{ color: 'text.secondary', fontSize: 14 }}>
+            Share progress, ask a question, or post a fresh update for your team.
+          </Typography>
+        </Box>
+      </Box>
 
-      {error && <Alert severity="warning" sx={{ mb: 2 }}>{error}</Alert>}
+      {error && (
+        <Alert severity="warning" sx={{ mb: 2, borderRadius: '12px' }}>
+          {error}
+        </Alert>
+      )}
 
       <Box component="form" onSubmit={handleSubmit}>
         <TextField
           fullWidth
           multiline
-          rows={3}
-          placeholder="What is on your mind?..."
+          rows={4}
+          placeholder="What are you building or thinking about today?"
           value={textContent}
-          onChange={(e) => setTextContent(e.target.value)}
-          sx={{ mb: 2 }}
+          onChange={(event) => setTextContent(event.target.value)}
+          sx={{
+            mb: 2,
+            '& .MuiOutlinedInput-root': {
+              alignItems: 'flex-start',
+              borderRadius: '12px',
+              bgcolor: isLight ? '#f8fafc' : alpha('#ffffff', 0.04),
+            },
+          }}
         />
 
-        {showImageInput && (
-          <TextField
-            fullWidth
-            placeholder="Paste public image link here (e.g., https://images.unsplash.com/...)"
-            value={imageUrl}
-            onChange={(e) => setImageUrl(e.target.value)}
-            sx={{ mb: 2 }}
-          />
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          hidden
+          onChange={handleImageSelection}
+        />
+
+        {imageUrl && (
+          <Box
+            sx={{
+              mb: 2,
+              p: 1.25,
+              borderRadius: '12px',
+              border: '1px solid',
+              borderColor: 'divider',
+              bgcolor: isLight ? '#f8fafc' : alpha('#ffffff', 0.03),
+            }}
+          >
+            <Box
+              component="img"
+              src={imageUrl}
+              alt="Selected upload preview"
+              sx={{
+                width: '100%',
+                maxHeight: 280,
+                objectFit: 'cover',
+                borderRadius: '10px',
+                display: 'block',
+                mb: 1.25,
+              }}
+            />
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1 }}>
+              <Typography sx={{ color: 'text.secondary', fontSize: 13 }} noWrap>
+                {selectedImageName || 'Selected image'}
+              </Typography>
+              <Button
+                variant="text"
+                color="inherit"
+                startIcon={<DeleteOutlineRoundedIcon />}
+                onClick={resetImageSelection}
+                sx={{
+                  flexShrink: 0,
+                  textTransform: 'none',
+                  color: 'text.secondary',
+                  borderRadius: '10px',
+                }}
+              >
+                Remove
+              </Button>
+            </Box>
+          </Box>
         )}
 
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 1.5, flexWrap: 'wrap' }}>
           <Button
             variant="text"
             startIcon={<ImageOutlinedIcon />}
-            onClick={() => setShowImageInput(!showImageInput)}
-            sx={{ textTransform: 'none', color: '#6c757d' }}
+            onClick={() => fileInputRef.current?.click()}
+            sx={{
+              textTransform: 'none',
+              color: 'text.secondary',
+              borderRadius: '12px',
+              px: 1.5,
+              '&:hover': { bgcolor: isLight ? '#f3f4f6' : alpha('#ffffff', 0.05) },
+            }}
           >
-            {showImageInput ? 'Remove Image link' : 'Add Image link'}
+            {imageUrl ? 'Change image' : 'Choose image'}
           </Button>
 
           <Button
             type="submit"
             variant="contained"
-            endIcon={<SendIcon />}
-            sx={{ bgcolor: '#007bff', textTransform: 'none', borderRadius: 2, px: 3 }}
+            endIcon={<SendRoundedIcon />}
+            sx={{
+              bgcolor: 'primary.main',
+              textTransform: 'none',
+              borderRadius: '12px',
+              px: 3,
+              py: 1,
+              fontWeight: 700,
+              boxShadow: 'none',
+              '&:hover': { bgcolor: '#0069d9', boxShadow: 'none' },
+            }}
           >
-            Post
+            Publish
           </Button>
         </Box>
       </Box>

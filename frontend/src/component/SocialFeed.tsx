@@ -2,13 +2,23 @@ import React, { useState, useEffect, useContext } from 'react';
 import API from '../api';
 import { AuthContext } from '../context/AuthContext';
 import { CreatePost } from './CreatePost';
-import { 
-  Container, Card, Box, Typography, Avatar, IconButton, 
-  Divider, TextField, Button, List, ListItem, ListItemText 
+import {
+  Avatar,
+  Box,
+  Button,
+  Card,
+  Divider,
+  List,
+  TextField,
+  Typography,
+  alpha,
+  useTheme,
 } from '@mui/material';
 import ThumbUpIcon from '@mui/icons-material/ThumbUp';
 import ThumbUpOutlinedIcon from '@mui/icons-material/ThumbUpOutlined';
-import ChatBubbleOutlineIcon from '@mui/icons-material/ChatBubble';
+import ChatBubbleOutlineRoundedIcon from '@mui/icons-material/ChatBubbleOutlineRounded';
+import LogoutRoundedIcon from '@mui/icons-material/LogoutRounded';
+
 interface PostData {
   _id: string;
   username: string;
@@ -21,6 +31,8 @@ interface PostData {
 
 export const SocialFeed: React.FC = () => {
   const auth = useContext(AuthContext);
+  const theme = useTheme();
+  const isLight = theme.palette.mode === 'light';
   const [posts, setPosts] = useState<PostData[]>([]);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(false);
@@ -47,139 +59,247 @@ export const SocialFeed: React.FC = () => {
   };
 
   const handleOptimisticLike = async (postId: string) => {
-    if (!auth?.user) return alert('Please sign in to react to posts!');
+    if (!auth?.user) {
+      alert('Please sign in to react to posts!');
+      return;
+    }
 
     const currentUserId = auth.user._id;
     const currentUsername = auth.user.username;
 
-    // 1. Instantly mutate local state before waiting for network resolution
     setPosts((prevPosts) =>
       prevPosts.map((post) => {
-        if (post._id === postId) {
-          const alreadyLiked = post.likes.some((l) => l.userId === currentUserId);
-          let updatedLikes = [...post.likes];
-
-          if (alreadyLiked) {
-            updatedLikes = updatedLikes.filter((l) => l.userId !== currentUserId);
-          } else {
-            updatedLikes.push({ userId: currentUserId, username: currentUsername });
-          }
-          return { ...post, likes: updatedLikes };
+        if (post._id !== postId) {
+          return post;
         }
-        return post;
-      })
+
+        const alreadyLiked = post.likes.some((like) => like.userId === currentUserId);
+        const updatedLikes = alreadyLiked
+          ? post.likes.filter((like) => like.userId !== currentUserId)
+          : [...post.likes, { userId: currentUserId, username: currentUsername }];
+
+        return { ...post, likes: updatedLikes };
+      }),
     );
 
     try {
-      // 2. Perform the async network transaction in the background
       await API.put(`/posts/${postId}/like`);
     } catch (err) {
-      // If server communication snaps, revert to fresh DB state
       fetchPosts(1, false);
     }
   };
 
   const handleCommentSubmit = async (postId: string) => {
     const text = commentInputs[postId];
-    if (!text || !text.trim()) return;
+    if (!text || !text.trim()) {
+      return;
+    }
 
     try {
       const { data } = await API.post(`/posts/${postId}/comment`, { text });
-      setPosts((prev) => prev.map((p) => (p._id === postId ? data : p)));
+      setPosts((prev) => prev.map((post) => (post._id === postId ? data : post)));
       setCommentInputs((prev) => ({ ...prev, [postId]: '' }));
     } catch (err) {
       console.error('Failed to submit comment:', err);
     }
   };
 
+  const cardSx = {
+    borderRadius: '12px',
+    bgcolor: 'background.paper',
+    boxShadow: isLight ? '0 1px 3px rgba(0,0,0,0.1)' : '0 1px 3px rgba(0,0,0,0.35)',
+    border: isLight ? 'none' : '1px solid rgba(255,255,255,0.08)',
+  };
+
   return (
-    <Container maxWidth="sm" sx={{ py: 4 }}>
+    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
       {auth?.user && (
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-          <Typography variant="h5" sx={{ fontWeight: 700, color: '#333' }}>
-            Welcome, {auth.user.username}!
-          </Typography>
-          <Button variant="outlined" color="error" size="small" onClick={auth.logout} sx={{ textTransform: 'none', borderRadius: 2 }}>
-            Logout
-          </Button>
-        </Box>
+        <Card sx={{ ...cardSx, p: { xs: 2, sm: 2.5 } }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2 }}>
+            <Box>
+              <Typography variant="h5" sx={{ fontWeight: 800, color: 'text.primary', mb: 0.5 }}>
+                Welcome back, {auth.user.username}
+              </Typography>
+              <Typography sx={{ color: 'text.secondary', fontSize: 14 }}>
+                Catch up on new updates from your network and share what you are working on.
+              </Typography>
+            </Box>
+            <Button
+              variant="outlined"
+              color="inherit"
+              startIcon={<LogoutRoundedIcon />}
+              onClick={auth.logout}
+              sx={{
+                flexShrink: 0,
+                textTransform: 'none',
+                borderRadius: '12px',
+                borderColor: 'divider',
+                color: 'text.secondary',
+                '&:hover': { borderColor: 'primary.main', color: 'primary.main', bgcolor: alpha('#007bff', 0.08) },
+              }}
+            >
+              Logout
+            </Button>
+          </Box>
+        </Card>
       )}
 
-      {auth?.user && <CreatePost onPostCreated={(newPost) => setPosts([newPost, ...posts])} />}
+      {auth?.user && <CreatePost onPostCreated={(newPost) => setPosts((prev) => [newPost, ...prev])} />}
 
-      <List disablePadding>
+      <List disablePadding sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
         {posts.map((post) => {
-          const isLikedByUser = post.likes.some((l) => l.userId === auth?.user?._id);
+          const isLikedByUser = post.likes.some((like) => like.userId === auth?.user?._id);
 
           return (
-            <Card key={post._id} sx={{ mb: 3, borderRadius: 3, boxShadow: '0px 2px 12px rgba(0,0,0,0.04)' }}>
-              {/* Header Box */}
-              <Box sx={{ p: 2, display: 'flex', alignItems: 'center' }}>
-                <Avatar sx={{ bgcolor: '#007bff', mr: 2 }}>{post.username[0].toUpperCase()}</Avatar>
+            <Card key={post._id} sx={cardSx}>
+              <Box sx={{ p: { xs: 2, sm: 2.5 }, display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                <Avatar sx={{ bgcolor: 'primary.main', width: 48, height: 48, fontWeight: 700 }}>
+                  {post.username[0].toUpperCase()}
+                </Avatar>
                 <Box>
-                  <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>{post.username}</Typography>
-                  <Typography variant="caption" color="text.secondary">
+                  <Typography sx={{ fontWeight: 700, color: 'text.primary' }}>{post.username}</Typography>
+                  <Typography sx={{ fontSize: 13, color: 'text.secondary' }}>
                     {new Date(post.createdAt).toLocaleDateString()}
                   </Typography>
                 </Box>
               </Box>
 
-              {/* Text Body */}
               {post.textContent && (
-                <Typography variant="body1" sx={{ px: 2, pb: 2, color: '#2c3e50', whitespace: 'pre-line' }}>
+                <Typography
+                  sx={{
+                    px: { xs: 2, sm: 2.5 },
+                    pb: post.imageUrl ? 2 : 2.5,
+                    color: 'text.primary',
+                    lineHeight: 1.7,
+                    whiteSpace: 'pre-line',
+                  }}
+                >
                   {post.textContent}
                 </Typography>
               )}
 
-              {/* Content Image */}
               {post.imageUrl && (
-                <Box component="img" src={post.imageUrl} alt="Post asset" sx={{ width: '100%', maxHeight: 400, objectFit: 'cover' }} />
+                <Box
+                  component="img"
+                  src={post.imageUrl}
+                  alt="Post asset"
+                  sx={{
+                    width: '100%',
+                    maxHeight: 420,
+                    objectFit: 'cover',
+                    display: 'block',
+                  }}
+                />
               )}
 
-              {/* Action Ribbon */}
-              <Box sx={{ px: 2, py: 1, display: 'flex', alignItems: 'center', gap: 3 }}>
-                <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                  <IconButton onClick={() => handleOptimisticLike(post._id)} sx={{ color: isLikedByUser ? '#007bff' : '#6c757d' }}>
-                    {isLikedByUser ? <ThumbUpIcon /> : <ThumbUpOutlinedIcon />}
-                  </IconButton>
-                  <Typography variant="body2" sx={{ fontWeight: 500, color: '#6c757d', ml: 0.5 }}>
-                    {post.likes.length}
-                  </Typography>
-                </Box>
-
-                <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                  <IconButton onClick={() => setActiveCommentBox(prev => ({ ...prev, [post._id]: !prev[post._id] }))} sx={{ color: '#6c757d' }}>
-                    <ChatBubbleOutlineIcon />
-                  </IconButton>
-                  <Typography variant="body2" sx={{ fontWeight: 500, color: '#6c757d', ml: 0.5 }}>
-                    {post.comments.length}
-                  </Typography>
+              <Box sx={{ px: { xs: 2, sm: 2.5 }, py: 1.25 }}>
+                <Divider sx={{ mb: 1.25, borderColor: 'divider' }} />
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <Button
+                    startIcon={isLikedByUser ? <ThumbUpIcon /> : <ThumbUpOutlinedIcon />}
+                    onClick={() => handleOptimisticLike(post._id)}
+                    sx={{
+                      flex: 1,
+                      justifyContent: 'center',
+                      textTransform: 'none',
+                      fontWeight: 700,
+                      color: isLikedByUser ? 'primary.main' : 'text.secondary',
+                      borderRadius: '10px',
+                      py: 1,
+                      '&:hover': {
+                        bgcolor: isLikedByUser ? alpha('#007bff', 0.12) : alpha(theme.palette.text.secondary, 0.08),
+                      },
+                    }}
+                  >
+                    Like {post.likes.length > 0 ? `(${post.likes.length})` : ''}
+                  </Button>
+                  <Button
+                    startIcon={<ChatBubbleOutlineRoundedIcon />}
+                    onClick={() =>
+                      setActiveCommentBox((prev) => ({ ...prev, [post._id]: !prev[post._id] }))
+                    }
+                    sx={{
+                      flex: 1,
+                      justifyContent: 'center',
+                      textTransform: 'none',
+                      fontWeight: 700,
+                      color: activeCommentBox[post._id] ? 'primary.main' : 'text.secondary',
+                      borderRadius: '10px',
+                      py: 1,
+                      '&:hover': {
+                        bgcolor: activeCommentBox[post._id]
+                          ? alpha('#007bff', 0.12)
+                          : alpha(theme.palette.text.secondary, 0.08),
+                      },
+                    }}
+                  >
+                    Comment {post.comments.length > 0 ? `(${post.comments.length})` : ''}
+                  </Button>
                 </Box>
               </Box>
 
-              {/* Comment Segment */}
               {activeCommentBox[post._id] && (
-                <Box sx={{ p: 2, bgcolor: '#f8f9fa', borderTop: '1px solid #eee' }}>
-                  <Divider sx={{ mb: 1 }} />
-                  {post.comments.map((comment, i) => (
-                    <Box key={i} sx={{ mb: 1.5 }}>
-                      <Typography variant="subtitle2" component="span" sx={{ fontWeight: 600, mr: 1, color: '#333' }}>
-                        {comment.username}
-                      </Typography>
-                      <Typography variant="body2" component="span" color="text.primary">
-                        {comment.text}
-                      </Typography>
-                    </Box>
-                  ))}
+                <Box
+                  sx={{
+                    px: { xs: 2, sm: 2.5 },
+                    pb: { xs: 2, sm: 2.5 },
+                    pt: 1,
+                    bgcolor: isLight ? '#fbfcfd' : alpha('#ffffff', 0.03),
+                    borderTop: '1px solid',
+                    borderColor: 'divider',
+                  }}
+                >
+                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.25, mb: post.comments.length ? 2 : 0 }}>
+                    {post.comments.map((comment, index) => (
+                      <Box
+                        key={`${comment.username}-${comment.createdAt}-${index}`}
+                        sx={{
+                          p: 1.5,
+                          borderRadius: '12px',
+                          bgcolor: 'background.paper',
+                          boxShadow: isLight ? '0 1px 2px rgba(15, 23, 42, 0.06)' : 'none',
+                          border: isLight ? 'none' : '1px solid rgba(255,255,255,0.06)',
+                        }}
+                      >
+                        <Typography component="span" sx={{ fontWeight: 700, color: 'text.primary', mr: 1 }}>
+                          {comment.username}
+                        </Typography>
+                        <Typography component="span" sx={{ color: 'text.secondary' }}>
+                          {comment.text}
+                        </Typography>
+                      </Box>
+                    ))}
+                  </Box>
 
                   {auth?.user && (
-                    <Box sx={{ display: 'flex', mt: 2, gap: 1 }}>
+                    <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
                       <TextField
-                        size="small" fullWidth placeholder="Write a comment..."
+                        size="small"
+                        fullWidth
+                        placeholder="Write a comment..."
                         value={commentInputs[post._id] || ''}
-                        onChange={(e) => setCommentInputs({ ...commentInputs, [post._id]: e.target.value })}
+                        onChange={(event) =>
+                          setCommentInputs((prev) => ({ ...prev, [post._id]: event.target.value }))
+                        }
+                        sx={{
+                          '& .MuiOutlinedInput-root': {
+                            borderRadius: '12px',
+                            bgcolor: 'background.paper',
+                          },
+                        }}
                       />
-                      <Button variant="contained" onClick={() => handleCommentSubmit(post._id)} sx={{ bgcolor: '#007bff', textTransform: 'none' }}>
+                      <Button
+                        variant="contained"
+                        onClick={() => handleCommentSubmit(post._id)}
+                        sx={{
+                          bgcolor: 'primary.main',
+                          textTransform: 'none',
+                          borderRadius: '12px',
+                          px: 2.25,
+                          boxShadow: 'none',
+                          '&:hover': { bgcolor: '#0069d9', boxShadow: 'none' },
+                        }}
+                      >
                         Reply
                       </Button>
                     </Box>
@@ -191,15 +311,26 @@ export const SocialFeed: React.FC = () => {
         })}
       </List>
 
-      {/* Pagination trigger hook */}
       {hasMore && (
-        <Button 
-          fullWidth variant="text" onClick={() => fetchPosts(page + 1, true)} 
-          sx={{ mt: 2, color: '#007bff', fontWeight: 600, textTransform: 'none' }}
+        <Button
+          fullWidth
+          variant="text"
+          onClick={() => fetchPosts(page + 1, true)}
+          sx={{
+            textTransform: 'none',
+            fontWeight: 700,
+            color: 'primary.main',
+            borderRadius: '12px',
+            py: 1.25,
+            bgcolor: 'background.paper',
+            boxShadow: isLight ? '0 1px 3px rgba(0,0,0,0.1)' : '0 1px 3px rgba(0,0,0,0.35)',
+            border: isLight ? 'none' : '1px solid rgba(255,255,255,0.08)',
+            '&:hover': { bgcolor: isLight ? '#f8fbff' : alpha('#007bff', 0.1) },
+          }}
         >
           Load More Posts
         </Button>
       )}
-    </Container>
+    </Box>
   );
 };
