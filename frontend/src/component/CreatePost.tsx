@@ -30,6 +30,9 @@ export const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
   const [selectedImageName, setSelectedImageName] = useState('');
   const [error, setError] = useState('');
 
+  const hasPostText = textContent.trim().length > 0;
+  const canPublish = hasPostText || imageUrl.trim().length > 0;
+
   const resetImageSelection = () => {
     setImageUrl('');
     setSelectedImageName('');
@@ -81,7 +84,7 @@ export const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
     event.preventDefault();
     setError('');
 
-    if (!textContent.trim() && !imageUrl.trim()) {
+    if (!canPublish) {
       setError('Please add some text or choose an image to share your post.');
       return;
     }
@@ -220,6 +223,7 @@ export const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
           <Button
             type="submit"
             variant="contained"
+            disabled={!canPublish}
             endIcon={<SendRoundedIcon />}
             sx={{
               bgcolor: 'primary.main',
@@ -230,6 +234,10 @@ export const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
               fontWeight: 700,
               boxShadow: 'none',
               '&:hover': { bgcolor: '#0069d9', boxShadow: 'none' },
+              '&.Mui-disabled': {
+                bgcolor: isLight ? '#dbeafe' : alpha('#007bff', 0.3),
+                color: isLight ? '#7c8aa5' : alpha('#ffffff', 0.5),
+              },
             }}
           >
             Publish

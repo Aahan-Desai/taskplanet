@@ -15,6 +15,8 @@ import {
   ListItemButton,
   ListItemIcon,
   ListItemText,
+  Slide,
+  Snackbar,
   ThemeProvider,
   Toolbar,
   Tooltip,
@@ -22,6 +24,7 @@ import {
   alpha,
   createTheme,
 } from '@mui/material';
+import type { SlideProps } from '@mui/material/Slide';
 import SearchIcon from '@mui/icons-material/Search';
 import NotificationsNoneRoundedIcon from '@mui/icons-material/NotificationsNoneRounded';
 import MailOutlineRoundedIcon from '@mui/icons-material/MailOutlineRounded';
@@ -37,12 +40,14 @@ import { AuthContext, AuthProvider } from './context/AuthContext';
 import { AuthPage } from './component/AuthPage';
 import { SocialFeed } from './component/SocialFeed';
 
+const SlideUpTransition = (props: SlideProps) => <Slide {...props} direction="up" />;
+
 const navItems = [
-  { label: 'Feed', icon: <HomeRoundedIcon /> },
-  { label: 'Explore', icon: <TravelExploreRoundedIcon /> },
-  { label: 'Notifications', icon: <NotificationsNoneRoundedIcon /> },
-  { label: 'Direct Messages', icon: <ForumRoundedIcon /> },
-  { label: 'Settings', icon: <SettingsRoundedIcon /> },
+  { label: 'Feed', icon: <HomeRoundedIcon />, isPlaceholder: false },
+  { label: 'Explore', icon: <TravelExploreRoundedIcon />, isPlaceholder: true },
+  { label: 'Notifications', icon: <NotificationsNoneRoundedIcon />, isPlaceholder: true },
+  { label: 'Direct Messages', icon: <ForumRoundedIcon />, isPlaceholder: true },
+  { label: 'Settings', icon: <SettingsRoundedIcon />, isPlaceholder: true },
 ];
 
 const trends = [
@@ -58,6 +63,8 @@ interface AppContentProps {
 
 const AppContent: React.FC<AppContentProps> = ({ mode, onToggleMode }) => {
   const auth = useContext(AuthContext);
+  const [isToastOpen, setIsToastOpen] = useState(false);
+  const [toastMessage, setToastMessage] = useState('');
 
   if (auth?.loading) {
     return (
@@ -74,6 +81,11 @@ const AppContent: React.FC<AppContentProps> = ({ mode, onToggleMode }) => {
     bgcolor: 'background.paper',
     boxShadow: mode === 'light' ? '0 1px 3px rgba(0,0,0,0.1)' : '0 1px 3px rgba(0,0,0,0.35)',
     border: mode === 'dark' ? '1px solid rgba(255,255,255,0.08)' : 'none',
+  };
+
+  const handlePlaceholderClick = (tabName: string) => {
+    setToastMessage(`${tabName} feature coming soon!`);
+    setIsToastOpen(true);
   };
 
   return (
@@ -136,12 +148,18 @@ const AppContent: React.FC<AppContentProps> = ({ mode, onToggleMode }) => {
                 {mode === 'light' ? <DarkModeRoundedIcon /> : <LightModeRoundedIcon />}
               </IconButton>
             </Tooltip>
-            <IconButton sx={{ color: '#ffffff' }}>
+            <IconButton
+              sx={{ color: '#ffffff' }}
+              onClick={() => handlePlaceholderClick('Notifications')}
+            >
               <Badge badgeContent={3} color="error">
                 <NotificationsNoneRoundedIcon />
               </Badge>
             </IconButton>
-            <IconButton sx={{ color: '#ffffff', display: { xs: 'none', sm: 'inline-flex' } }}>
+            <IconButton
+              sx={{ color: '#ffffff', display: { xs: 'none', sm: 'inline-flex' } }}
+              onClick={() => handlePlaceholderClick('Direct Messages')}
+            >
               <Badge badgeContent={2} color="error">
                 <MailOutlineRoundedIcon />
               </Badge>
@@ -202,6 +220,7 @@ const AppContent: React.FC<AppContentProps> = ({ mode, onToggleMode }) => {
                     {navItems.map((item) => (
                       <ListItemButton
                         key={item.label}
+                        onClick={item.isPlaceholder ? () => handlePlaceholderClick(item.label) : undefined}
                         sx={{
                           borderRadius: '12px',
                           mb: 0.5,
@@ -307,6 +326,15 @@ const AppContent: React.FC<AppContentProps> = ({ mode, onToggleMode }) => {
           </Grid>
         </Grid>
       </Box>
+
+      <Snackbar
+        open={isToastOpen}
+        autoHideDuration={3000}
+        onClose={() => setIsToastOpen(false)}
+        message={toastMessage}
+        slots={{ transition: SlideUpTransition }}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      />
     </Box>
   );
 };
